@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YT Downloader Console</title>
+    <style>
+      :root {
+        --brand-main: #2563eb;
+        --brand-hover: #1d4ed8;
+        --surface: #ffffff;
+        --background: #f1f5f9;
+        --error-bg: #fee2e2;
+        --error-text: #991b1b;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        background-color: var(--background);
+        color: #1e293b;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+        padding: 1rem;
+      }
+      .card {
+        background-color: var(--surface);
+        padding: 2.5rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+        width: 100%;
+        max-width: 480px;
+      }
+      h1 {
+        margin: 0 0 1.5rem 0;
+        font-size: 1.5rem;
+        text-align: center;
+      }
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      label {
+        font-weight: 500;
+        font-size: 0.95rem;
+      }
+      input[type="url"] {
+        padding: 0.85rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 1rem;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      input[type="url"]:focus {
+        border-color: var(--brand-main);
+      }
+
+      button {
+        padding: 0.85rem;
+        background-color: var(--brand-main);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.2s ease;
+      }
+      button:hover:not(:disabled) {
+        background-color: var(--brand-hover);
+      }
+      button:disabled {
+        background-color: #94a3b8;
+        cursor: not-allowed;
+      }
+
+      .status-section {
+        margin-top: 1.5rem;
+        display: none;
+      }
+      .status-text {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+      }
+
+      .progress-container {
+        width: 100%;
+        height: 8px;
+        background-color: #e2e8f0;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 0.5rem;
+      }
+      .progress-bar {
+        height: 100%;
+        width: 0%;
+        background-color: var(--brand-main);
+        transition: width 0.3s ease;
+      }
+      .stats-text {
+        font-size: 0.8rem;
+        color: #64748b;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .error-alert {
+        margin-top: 1.5rem;
+        padding: 1rem;
+        background-color: var(--error-bg);
+        color: var(--error-text);
+        border-radius: 8px;
+        display: none;
+        font-size: 0.95rem;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>YouTube Downloader</h1>
+
+      <form id="downloadForm" class="form-group">
+        <label for="urlInput">Enter Media URL</label>
+        <input
+          type="url"
+          id="urlInput"
+          placeholder="https://www.youtube.com/watch?v=..."
+          required
+          autocomplete="off"
+        />
+        <button type="submit" id="downloadBtn">Start Processing</button>
+      </form>
+
+      <div class="error-alert" id="errorAlert"></div>
+
+      <div class="status-section" id="statusSection">
+        <div class="status-text" id="statusText">Awaiting metadata...</div>
+        <div class="progress-container">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="stats-text">
+          <span id="speedText"></span>
+          <span id="etaText"></span>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const UI = {
+        form: document.getElementById("downloadForm"),
+        input: document.getElementById("urlInput"),
+        btn: document.getElementById("downloadBtn"),
+        alert: document.getElementById("errorAlert"),
+        statusBox: document.getElementById("statusSection"),
+        statusMsg: document.getElementById("statusText"),
+        bar: document.getElementById("progressBar"),
+        speed: document.getElementById("speedText"),
+        eta: document.getElementById("etaText"),
+      };
+
+      function generateID() {
+        return (
+          Math.random().toString(36).substring(2) + Date.now().toString(36)
+        );
+      }
+      function showError(msg) {
+        UI.alert.textContent = msg;
+        UI.alert.style.display = "block";
+      }
+      function clearError() {
+        UI.alert.style.display = "none";
+        UI.alert.textContent = "";
+      }
+
+      function resetUI() {
+        UI.input.value = "";
+        UI.input.disabled = false;
+        UI.btn.disabled = false;
+        UI.statusBox.style.display = "none";
+        UI.bar.style.width = "0%";
+        UI.speed.textContent = "";
+        UI.eta.textContent = "";
+      }
+
+      UI.form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        const url = UI.input.value.trim();
+        if (!url) return showError("Please enter a valid dataset link.");
+
+        // Lock form state execution immediately
+        clearError();
+        UI.input.disabled = true;
+        UI.btn.disabled = true;
+        UI.statusBox.style.display = "block";
+        UI.statusMsg.textContent = "Initializing engine...";
+
+        const clientId = generateID();
+
+        // 1. Establish SSE real-time hook
+        const sse = new EventSource(`/api/progress/${clientId}`);
+
+        sse.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+
+          if (data.status === "downloading") {
+            UI.bar.style.width = data.percent.replace("%", "") + "%";
+            UI.statusMsg.textContent = `Target: ${data.filename || "media"}`;
+            UI.speed.textContent = `Speed: ${data.speed}`;
+            UI.eta.textContent = `ETA: ${data.eta}`;
+          } else if (data.status === "info") {
+            UI.statusMsg.textContent = data.message;
+          } else if (data.status === "error") {
+            sse.close();
+            UI.statusBox.style.display = "none";
+            showError(data.message);
+            UI.input.disabled = false;
+            UI.btn.disabled = false;
+          } else if (data.status === "complete") {
+            sse.close();
+            UI.statusMsg.textContent = "Transfer Complete! Saved to your Downloads folder.";
+            UI.bar.style.width = "100%";
+            UI.speed.textContent = "";
+            UI.eta.textContent = "";
+
+            setTimeout(resetUI, 4500); // 4.5sec delay before rebooting form UI
+          }
+        };
+
+        // 2. Submit initial state payload
+        const formData = new URLSearchParams();
+        formData.append("url", url);
+        formData.append("client_id", clientId);
+
+        fetch("/api/start", { method: "POST", body: formData })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.error) {
+              sse.close();
+              showError(data.error);
+              resetUI();
+            }
+          })
+          .catch(() => {
+            sse.close();
+            showError("Lost backend communication.");
+            resetUI();
+          });
+      });
+    </script>
+  </body>
+</html>
