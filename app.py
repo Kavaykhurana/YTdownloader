@@ -85,7 +85,7 @@ def download_task(url, client_id, is_playlist):
             {'key': 'FFmpegSubtitlesConvertor', 'format': 'srt'},             # Convert subs to SRT for compatibility
             {'key': 'FFmpegEmbedSubtitle'}                                    # Embed subtitles natively into the MP4
         ],
-        'outtmpl': os.path.join(out_dir, '%(title)s.%(ext)s'),
+        'outtmpl': os.path.join(out_dir, '%(playlist_index)03d-%(title)s.%(ext)s' if is_playlist else '%(title)s.%(ext)s'),
         'progress_hooks': [lambda d: progress_hook(d, client_id)],
         'noplaylist': not is_playlist, # Force single-video behavior if no list param found
         'extract_flat': False,
