@@ -18,6 +18,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Base directory setup for native Local Storage
+# Save directly to the native Downloads folder
 DOWNLOAD_DIR = os.path.expanduser('~/Downloads')
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
@@ -66,17 +67,20 @@ def download_task(url, client_id, is_playlist):
     import yt_dlp
     import imageio_ffmpeg
     
-    # Download directly into the native Downloads folder, no subdirectories needed
-    out_dir = DOWNLOAD_DIR
     q = progress_queues.get(client_id)
+    if is_playlist:
+        out_dir = os.path.join(DOWNLOAD_DIR, f"temp_playlist_{client_id}")
+        os.makedirs(out_dir, exist_ok=True)
+    else:
+        out_dir = DOWNLOAD_DIR
     
     ydl_opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', # Grab absolute maximum resolution and merge
         'ffmpeg_location': imageio_ffmpeg.get_ffmpeg_exe(),                   # Use pip-installed FFmpeg binary
         'merge_output_format': 'mp4',                                         # Output strictly as mp4
-        'writesubtitles': True,                                               # Download manually written subtitles
-        'writeautomaticsub': True,                                            # Fallback to auto-generated subtitles
-        'subtitleslangs': ['all'],                                            # Grab all available languages
+        'writesubtitles': False,                                               # Download manually written subtitles
+        'writeautomaticsub': False,                                            # Fallback to auto-generated subtitles
+        # 'subtitleslangs': ['en', 'en-US', 'en-UK'],                           # Avoid 429 Too Many Requests by requesting specific languages instead of 'all'
         'postprocessors': [
             {'key': 'FFmpegSubtitlesConvertor', 'format': 'srt'},             # Convert subs to SRT for compatibility
             {'key': 'FFmpegEmbedSubtitle'}                                    # Embed subtitles natively into the MP4
@@ -101,6 +105,14 @@ def download_task(url, client_id, is_playlist):
             if not info or 'entries' not in info or not info['entries']:
                 raise RuntimeError("Playlist is empty or unavailable.")
                 
+            q.put({'status': 'info', 'message': 'Zipping playlist...'})
+            playlist_name = info.get('title', 'playlist').replace('/', '_')
+            zip_base_path = os.path.join(DOWNLOAD_DIR, playlist_name)
+            
+            # Create zip and delete temporary directory
+            shutil.make_archive(zip_base_path, 'zip', out_dir)
+            shutil.rmtree(out_dir)
+            
             q.put({
                 'status': 'complete',
                 'download_url': None
@@ -172,4 +184,6 @@ def progress_stream(client_id):
 
 if __name__ == '__main__':
     # Threaded parameter mandatory for bridging SSE and heavy internal routines
-    app.run(host='127.0.0.1', port=5000, threaded=True)
+    # Using port 5001 as 5000 is often reserved by macOS AirPlay Receiver
+    print("\n🚀 Server starting! Click here: http://127.0.0.1:5001")
+    app.run(host='0.0.0.0', port=5001, threaded=True)
