@@ -78,9 +78,9 @@ def download_task(url, client_id, is_playlist):
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', # Grab absolute maximum resolution and merge
         'ffmpeg_location': imageio_ffmpeg.get_ffmpeg_exe(),                   # Use pip-installed FFmpeg binary
         'merge_output_format': 'mp4',                                         # Output strictly as mp4
-        'writesubtitles': False,                                               # Download manually written subtitles
-        'writeautomaticsub': False,                                            # Fallback to auto-generated subtitles
-        # 'subtitleslangs': ['en', 'en-US', 'en-UK'],                           # Avoid 429 Too Many Requests by requesting specific languages instead of 'all'
+        'writesubtitles': True,                                                # Download manually written subtitles
+        'writeautomaticsub': True,                                             # Fallback to auto-generated subtitles
+        'subtitleslangs': ['en', 'en-US', 'en-UK'],                            # Avoid 429 Too Many Requests by requesting specific languages instead of 'all'
         'postprocessors': [
             {'key': 'FFmpegSubtitlesConvertor', 'format': 'srt'},             # Convert subs to SRT for compatibility
             {'key': 'FFmpegEmbedSubtitle'}                                    # Embed subtitles natively into the MP4
